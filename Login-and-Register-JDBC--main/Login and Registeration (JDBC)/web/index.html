@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Secure Access — Enterprise Authentication</title>
+  <meta name="description" content="Advanced JDBC-powered authentication system." />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-1: #090912;
+      --bg-2: #0f0f23;
+      --glass-bg: rgba(255, 255, 255, 0.04);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --accent: #8b5cf6;
+      --accent-mid: #7c3aed;
+      --accent-glow: rgba(139, 92, 246, 0.3);
+      --success: #10b981;
+      --error: #ef4444;
+      --warn: #f59e0b;
+      --text: #f1f1f7;
+      --muted: #8686a1;
+      --input-bg: rgba(0, 0, 0, 0.3);
+      --radius: 20px;
+      --shadow: 0 40px 100px rgba(0, 0, 0, 0.7);
+    }
+
+    html, body {
+      height: 100%;
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-1);
+      color: var(--text);
+      overflow-x: hidden;
+      cursor: default;
+    }
+
+    /* ── Kinetic Background ── */
+    .bg-canvas {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    }
+    .blob {
+      position: absolute; border-radius: 50%; filter: blur(100px); opacity: 0.25;
+      transition: transform 0.6s cubic-bezier(0.165, 0.84, 0.44, 1);
+    }
+    .blob-1 { width: 600px; height: 600px; background: #6d28d9; top: -10%; left: -5%; }
+    .blob-2 { width: 450px; height: 450px; background: #2563eb; bottom: -5%; right: -5%; }
+    .blob-3 { width: 350px; height: 350px; background: #db2777; top: 40%; left: 40%; }
+
+    /* ── Page Structure ── */
+    .page {
+      position: relative; z-index: 10;
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 40px 20px;
+    }
+
+    /* ── Authentication Card ── */
+    .card {
+      width: 100%; max-width: 440px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-top: 1px solid rgba(255,255,255,0.15);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      overflow: hidden;
+      animation: reveal 0.8s cubic-bezier(0.19, 1, 0.22, 1) both;
+    }
+    @keyframes reveal {
+      from { opacity: 0; transform: translateY(60px) scale(0.95); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* ── Brand / Header ── */
+    .brand {
+      padding: 40px 40px 10px;
+      text-align: center;
+    }
+    .logo-container {
+      position: relative; width: 64px; height: 64px; margin: 0 auto 20px;
+    }
+    .logo-ring {
+      position: absolute; inset: 0; border: 2px solid var(--accent);
+      border-radius: 16px; transform: rotate(45deg);
+      animation: pulse-ring 3s infinite;
+    }
+    .logo-icon {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      font-size: 32px;
+    }
+    @keyframes pulse-ring {
+      0% { transform: rotate(45deg) scale(0.9); opacity: 0.5; }
+      50% { transform: rotate(45deg) scale(1.1); opacity: 1; }
+      100% { transform: rotate(45deg) scale(0.9); opacity: 0.5; }
+    }
+
+    .brand h1 {
+      font-size: 24px; font-weight: 800; color: #fff; letter-spacing: -0.5px;
+      background: linear-gradient(to bottom, #fff, #a7a7c0);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .brand p { font-size: 13.5px; color: var(--muted); margin-top: 6px; }
+
+    /* ── Custom Tabs ── */
+    .tabs {
+      display: flex; margin: 24px 40px 0; padding: 4px;
+      background: rgba(0, 0, 0, 0.3); border-radius: 14px;
+      border: 1px solid var(--glass-border);
+    }
+    .tab-btn {
+      flex: 1; padding: 10px; border: none; border-radius: 10px;
+      font-family: inherit; font-size: 13px; font-weight: 600;
+      color: var(--muted); background: transparent; cursor: pointer;
+      transition: all 0.3s;
+    }
+    .tab-btn.active {
+      background: var(--accent); color: #fff;
+      box-shadow: 0 4px 15px var(--accent-glow);
+    }
+    .tab-btn:not(.active):hover { color: #fff; background: rgba(255,255,255,0.05); }
+
+    /* ── Form Styling ── */
+    .forms { padding: 30px 40px 40px; }
+    .form-panel { display: none; animation: slideIn 0.4s ease-out; }
+    .form-panel.active { display: block; }
+    @keyframes slideIn { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: translateX(0); } }
+
+    .field { margin-bottom: 20px; }
+    .field label {
+      display: block; font-size: 11px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;
+    }
+    .input-wrap { position: relative; }
+    .input-wrap i {
+      position: absolute; left: 15px; top: 14px; color: var(--muted); font-size: 16px;
+    }
+    .field input {
+      width: 100%; padding: 13px 15px 13px 44px;
+      background: var(--input-bg); border: 1px solid var(--glass-border);
+      border-radius: 12px; color: #fff; font-family: inherit; font-size: 14px;
+      outline: none; transition: all 0.3s;
+    }
+    .field input:focus {
+      border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-glow);
+      background: rgba(0, 0, 0, 0.4);
+    }
+
+    /* ── Password Security Meter ── */
+    .strength-meter {
+      height: 4px; border-radius: 2px; background: rgba(255,255,255,0.05);
+      margin-top: 8px; overflow: hidden; position: relative;
+    }
+    .strength-bar {
+      height: 100%; width: 0%; transition: all 0.4s ease;
+    }
+    .strength-text {
+      font-size: 10px; font-weight: 600; margin-top: 5px;
+      display: flex; justify-content: flex-end; color: var(--muted);
+    }
+
+    /* ── Action Buttons ── */
+    .btn-submit {
+      width: 100%; padding: 14px; margin-top: 10px;
+      background: var(--accent); border: none; border-radius: 12px;
+      color: #fff; font-size: 15px; font-weight: 700; cursor: pointer;
+      box-shadow: 0 8px 25px var(--accent-glow);
+      transition: all 0.3s;
+    }
+    .btn-submit:hover { transform: translateY(-3px); box-shadow: 0 12px 30px var(--accent-glow); }
+    .btn-submit:active { transform: translateY(-1px); }
+    .btn-submit:disabled { opacity: 0.5; cursor: wait; transform: none; }
+
+    /* ── Animations ── */
+    @keyframes blink {
+      0%, 100% { opacity: 1; filter: brightness(1.2) drop-shadow(0 0 10px var(--accent)); }
+      50% { opacity: 0.7; filter: brightness(1) drop-shadow(0 0 0px var(--accent)); }
+    }
+    .blink-status {
+      animation: blink 2s infinite;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      font-weight: 700;
+    }
+
+    /* ── Custom Cursor ── */
+    #cursor-follower {
+      position: fixed;
+      top: 0; left: 0;
+      width: 12px;
+      height: 12px;
+      background: #fff;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 9999;
+      mix-blend-mode: difference;
+      transition: width 0.3s ease, height 0.3s ease;
+      opacity: 1;
+    }
+    #cursor-outline {
+      position: fixed;
+      top: 0; left: 0;
+      width: 40px;
+      height: 40px;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 9998;
+      transition: width 0.3s ease, height 0.3s ease, border 0.3s ease, background 0.3s ease;
+      opacity: 0.5;
+    }
+
+    /* ── Hover States for Cursor ── */
+    body.cursor-hover #cursor-follower {
+      width: 4px;
+      height: 4px;
+      background: var(--accent);
+      opacity: 0.8;
+    }
+    body.cursor-hover #cursor-outline {
+      width: 60px;
+      height: 60px;
+      border: 1px solid var(--accent);
+      background: rgba(139, 92, 246, 0.1);
+      opacity: 1;
+    }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%) translateY(100px);
+      background: #18182b; border: 1px solid var(--glass-border);
+      border-radius: 12px; padding: 15px 30px; font-size: 14px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5); z-index: 1000;
+      opacity: 0; transition: all 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ── Dashboard (Post Login) ── */
+    #dashboard { display: none; padding: 40px; text-align: center; animation: zoomIn 0.5s both; }
+    @keyframes zoomIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+
+    .user-init {
+      width: 80px; height: 80px; margin: 0 auto 20px; border-radius: 20px;
+      background: linear-gradient(135deg, var(--accent), #db2777);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 36px; font-weight: 800; color: #fff;
+      box-shadow: 0 10px 30px var(--accent-glow);
+    }
+
+    .dash-details {
+      background: rgba(0,0,0,0.2); border-radius: 15px; padding: 20px;
+      margin-top: 25px; text-align: left; border: 1px solid var(--glass-border);
+    }
+    .dash-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .dash-row:last-child { border-bottom: none; }
+    .dash-label { font-size: 12px; color: var(--muted); }
+    .dash-value { font-size: 13px; font-weight: 600; color: #fff; }
+
+    .switch-link { text-align: center; font-size: 13px; color: var(--muted); margin-top: 20px; }
+    .switch-link a { color: var(--accent); text-decoration: none; font-weight: 600; cursor: pointer; }
+    .switch-link a:hover { color: #fff; }
+
+  </style>
+</head>
+<body>
+  <div id="cursor-follower"></div>
+  <div id="cursor-outline"></div>
+
+  <div class="bg-canvas">
+    <div class="blob blob-1" id="blob1"></div>
+    <div class="blob blob-2" id="blob2"></div>
+    <div class="blob blob-3" id="blob3"></div>
+  </div>
+
+  <div id="toast"></div>
+
+  <main class="page">
+    <div class="card">
+      <div class="brand">
+        <div class="logo-container">
+          <div class="logo-ring"></div>
+          <div class="logo-icon">🛡️</div>
+        </div>
+        <div class="blink-status">
+          <span class="tech-dot"></span> System Online
+        </div>
+        <h1>Enterprise Access</h1>
+        <p>Advanced Security Infrastructure Console</p>
+      </div>
+
+      <div class="tabs" id="authTabs">
+        <button class="tab-btn active" onclick="switchTab('login')">Sign In</button>
+        <button class="tab-btn" onclick="switchTab('register')">Enrollment</button>
+      </div>
+
+      <div class="forms">
+        <!-- LOGIN -->
+        <div class="form-panel active" id="loginPanel">
+          <form onsubmit="handleLogin(event)">
+            <div class="field">
+              <label>Service Identity</label>
+              <div class="input-wrap">
+                <input type="text" id="loginUser" placeholder="Username" required />
+              </div>
+            </div>
+            <div class="field">
+              <label>Encrypted Key</label>
+              <div class="input-wrap">
+                <input type="password" id="loginPass" placeholder="••••••••" required />
+              </div>
+            </div>
+            <button type="submit" class="btn-submit" id="loginBtn">Authenticate</button>
+          </form>
+          <div class="switch-link">New operator? <a onclick="switchTab('register')">Create account</a></div>
+        </div>
+
+        <!-- REGISTER -->
+        <div class="form-panel" id="registerPanel">
+          <form onsubmit="handleRegister(event)">
+            <div class="field">
+              <label>Assigned Username</label>
+              <input type="text" id="regUser" placeholder="3-50 characters" required />
+            </div>
+            <div class="field">
+              <label>Communication Email</label>
+              <input type="email" id="regEmail" placeholder="service@example.com" required />
+            </div>
+            <div class="field">
+              <label>Security Passphrase</label>
+              <input type="password" id="regPass" placeholder="Strong credentials only" required oninput="checkStrength(this.value)" />
+              <div class="strength-meter"><div class="strength-bar" id="strengthBar"></div></div>
+              <div class="strength-text" id="strengthText">Complexity: Pending</div>
+            </div>
+            <div class="field">
+              <label>Re-verify Passphrase</label>
+              <input type="password" id="regConfirm" placeholder="Confirm" required />
+            </div>
+            <button type="submit" class="btn-submit" id="regBtn">Commit Registration</button>
+          </form>
+          <div class="switch-link">Existing operator? <a onclick="switchTab('login')">Sign in</a></div>
+        </div>
+
+        <!-- DASHBOARD -->
+        <div id="dashboard">
+          <div class="user-init" id="userInit">?</div>
+          <h2 id="userName">Terminal Accessed</h2>
+          <p id="userMail" style="font-size: 13px; color: var(--muted); margin-bottom: 20px;"></p>
+
+          <div class="dash-details">
+            <div class="dash-row"><span class="dash-label">Session ID</span><span class="dash-value" id="userId">#000</span></div>
+            <div class="dash-row"><span class="dash-label">Auth Provider</span><span class="dash-value">JDBC / MySQL</span></div>
+            <div class="dash-row"><span class="dash-label">Encryption</span><span class="dash-value">BCrypt (Work: 12)</span></div>
+            <div class="dash-row"><span class="dash-label">Network Status</span><span class="dash-value" style="color:var(--success)">Encrypted</span></div>
+          </div>
+
+          <button class="btn-submit" style="background: rgba(255,255,255,0.05); box-shadow: none; border: 1px solid var(--glass-border); margin-top: 30px;" onclick="logout()">Terminate Session</button>
+        </div>
+      </div>
+
+
+    </div>
+  </main>
+
+  <script>
+    const API_URL = 'http://localhost:8080/api';
+
+    /* ── Kinetic Background & Cursor ── */
+    const cursor = document.getElementById('cursor-follower');
+    const cursorOutline = document.getElementById('cursor-outline');
+
+    document.addEventListener('mousemove', (e) => {
+      const x = (e.clientX / window.innerWidth - 0.5) * 40;
+      const y = (e.clientY / window.innerHeight - 0.5) * 40;
+      document.getElementById('blob1').style.transform = `translate(${x*1.5}px, ${y*1.5}px)`;
+      document.getElementById('blob2').style.transform = `translate(${-x}px, ${-y}px)`;
+      document.getElementById('blob3').style.transform = `translate(${x*0.5}px, ${-y*1.2}px)`;
+
+      // Cursor follower (Fixed center)
+      cursor.style.transform = `translate3d(${e.clientX}px, ${e.clientY}px, 0) translate(-50%, -50%)`;
+      cursorOutline.style.transform = `translate3d(${e.clientX}px, ${e.clientY}px, 0) translate(-50%, -50%)`;
+    });
+
+    // Reactive interaction
+    document.addEventListener('mouseover', (e) => {
+      const target = e.target.closest('button, a, input, .tab-btn');
+      if (target) document.body.classList.add('cursor-hover');
+    });
+    document.addEventListener('mouseout', (e) => {
+      const target = e.target.closest('button, a, input, .tab-btn');
+      if (target) document.body.classList.remove('cursor-hover');
+    });
+
+    /* ── Tab Switching ── */
+    function switchTab(tab) {
+      const tabs = document.querySelectorAll('.tab-btn');
+      tabs[0].classList.toggle('active', tab === 'login');
+      tabs[1].classList.toggle('active', tab === 'register');
+
+      document.getElementById('loginPanel').classList.toggle('active', tab === 'login');
+      document.getElementById('registerPanel').classList.toggle('active', tab === 'register');
+    }
+
+    /* ── Password Strength Logic ── */
+    function checkStrength(p) {
+      let score = 0;
+      if (p.length > 7) score++;
+      if (/[A-Z]/.test(p)) score++;
+      if (/[0-9]/.test(p)) score++;
+      if (/[@#$%^&+=!*]/.test(p)) score++;
+
+      const bar = document.getElementById('strengthBar');
+      const txt = document.getElementById('strengthText');
+      const colors = ['#ef4444', '#f59e0b', '#3b82f6', '#10b981'];
+      const text = ['Critical', 'Low', 'Secure', 'Enterprise'];
+
+      if (p === "") {
+        bar.style.width = '0%'; txt.innerText = "Complexity: Pending"; return;
+      }
+
+      bar.style.width = (score * 25) + '%';
+      bar.style.background = colors[score - 1] || colors[0];
+      txt.innerText = "Complexity: " + (text[score - 1] || text[0]);
+    }
+
+    /* ── Global API Handler ── */
+    async function apiRequest(endpoint, data) {
+      const response = await fetch(`${API_URL}/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      return await response.json();
+    }
+
+    function notify(msg, success = true) {
+      const t = document.getElementById('toast');
+      t.innerText = msg;
+      t.style.borderLeft = `4px solid ${success ? '#10b981' : '#ef4444'}`;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    /* ── Login Logic ── */
+    async function handleLogin(e) {
+      e.preventDefault();
+      const btn = document.getElementById('loginBtn');
+      btn.disabled = true;
+
+      try {
+        const u = document.getElementById('loginUser').value;
+        const p = document.getElementById('loginPass').value;
+        const res = await apiRequest('login', { username: u, password: p });
+
+        if (res.success) {
+          notify(`Welcome Operator: ${u}`);
+          renderDashboard(res.user);
+        } else {
+          notify(res.message, false);
+        }
+      } catch (err) {
+        notify("Network failure. Check WebServer.java.", false);
+      } finally { btn.disabled = false; }
+    }
+
+    /* ── Registration Logic ── */
+    async function handleRegister(e) {
+      e.preventDefault();
+      const p = document.getElementById('regPass').value;
+      const c = document.getElementById('regConfirm').value;
+
+      if (p !== c) { notify("Key mismatch detected.", false); return; }
+
+      const btn = document.getElementById('regBtn');
+      btn.disabled = true;
+
+      try {
+        const u = document.getElementById('regUser').value;
+        const m = document.getElementById('regEmail').value;
+        const res = await apiRequest('register', { username: u, email: m, password: p, confirmPassword: c });
+
+        if (res.success) {
+          notify("Registration commited to database.");
+          setTimeout(() => switchTab('login'), 1500);
+        } else {
+          notify(res.message, false);
+        }
+      } catch (err) {
+        notify("Data link unavailable.", false);
+      } finally { btn.disabled = false; }
+    }
+
+    function renderDashboard(user) {
+      document.getElementById('loginPanel').classList.remove('active');
+      document.getElementById('registerPanel').classList.remove('active');
+      document.getElementById('authTabs').style.display = 'none';
+      document.getElementById('techBar').style.display = 'none';
+      document.getElementById('dashboard').style.display = 'block';
+
+      document.getElementById('userInit').innerText = user.username.charAt(0).toUpperCase();
+      document.getElementById('userName').innerText = user.username;
+      document.getElementById('userMail').innerText = user.email;
+      document.getElementById('userId').innerText = `#00${user.id}`;
+    }
+
+    function logout() {
+      location.reload();
+    }
+  </script>
+</body>
+</html>
